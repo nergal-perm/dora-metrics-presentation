@@ -14,6 +14,16 @@ Class {
 	#category : #AccelerateMetrics
 }
 
+{ #category : #'as yet unclassified' }
+AcMetRelease class >> releaseRe [
+
+	"comment stating purpose of class-side method"
+
+	"scope: class-variables  &  class-instance-variables"
+
+	^ '[\W\w]*release\/(\d+\.\d+)' asRegexIgnoringCase.
+]
+
 { #category : #accessing }
 AcMetRelease >> commits [
 
@@ -28,6 +38,12 @@ AcMetRelease >> commits: anObject [
 { #category : #accessing }
 AcMetRelease >> fixes [
 	^ fixes ifNil: [ '' ]
+]
+
+{ #category : #accessing }
+AcMetRelease >> fixes: aVersion [
+
+	fixes := aVersion.
 ]
 
 { #category : #accessing }
@@ -54,12 +70,13 @@ AcMetRelease >> medianCommitAge [
 { #category : #accessing }
 AcMetRelease >> rawData: aTag [
 
+	| releaseRegExp |
 	tag := aTag splitOn: $,.
 	releaseDate := (tag at: 1) asDateAndTime.
 	tagRef := tag at: 2.
-	version := self tagRef withoutPrefix: 'refs/tags/release/'.
-	fixes := (self version endsWith: '-fix') ifTrue: [ 
-		         self version withoutSuffix: '-fix' ]
+	releaseRegExp := self class releaseRe.
+	version := (releaseRegExp matchesPrefix: (tag at: 3)) ifTrue: [ 
+		                  releaseRegExp subexpression: 2 ]
 ]
 
 { #category : #accessing }

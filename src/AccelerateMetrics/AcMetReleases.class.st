@@ -36,18 +36,21 @@ AcMetReleases >> gtReleasesListFor: aView [
 
 { #category : #accessing }
 AcMetReleases >> intervalAsString: anInterval [
-	^ anInterval hours asString, 'h ', anInterval minutes asString, 'm'
+	^ anInterval days asString, 'd ', anInterval hours asString, 'h ', anInterval minutes asString, 'm'
 ]
 
 { #category : #accessing }
 AcMetReleases >> metrics [
 
-	| tempReleases depInterval commitAge |
-	tempReleases := releases allButLast.
+	| tempReleases depInterval commitAge releaseCommitAge |
+	tempReleases := releases allButFirst.
 	depInterval := (tempReleases collect: [ :each | 
 		                each refDate - each fromDate ]) average.
 	commitAge := (tempReleases collect: [ :each | each medianCommitAge ])
 		             average.
+	releaseCommitAge := ((tempReleases select: [ :each | 
+		                      each fixes isEmpty ]) collect: [ :each | 
+		                     each medianCommitAge ]) average.
 	fixAge := ((tempReleases select: [ :each | each fixes isNotEmpty ]) 
 		           collect: [ :each | 
 			           each refDate
@@ -60,9 +63,11 @@ AcMetReleases >> metrics [
 		  put: (self intervalAsString: depInterval);
 		  at: 'Fail Rate'
 		  put:
-			  ((tempReleases select: [ :each | each fixes isNotEmpty ]) size
-			   / releases size round: 2) numerator asString , '%';
+			  (((tempReleases select: [ :each | each fixes isNotEmpty ]) size
+			    * 100 / releases size) asFloat round: 0) asString , '%';
 		  at: 'Lead Time' put: (self intervalAsString: commitAge);
+		  at: 'Release Lead Time'
+		  put: (self intervalAsString: releaseCommitAge);
 		  at: 'Mean Time to Recover' put: (self intervalAsString: fixAge);
 		  yourself
 ]
@@ -70,31 +75,35 @@ AcMetReleases >> metrics [
 { #category : #accessing }
 AcMetReleases >> rawData: anArray [
 
-	| tempReleases commits lastRelease |
+	| tempReleases lastRelease lastVersion |
 	releaseTags := anArray.
 
 
-	tempReleases := (releaseTags reject: [ :tag | tag beginsWith: '",' ]) 
-		                collect: [ :tag | AcMetRelease new rawData: tag ].
-	releases := tempReleases doWithIndex: [ :currRelease :index | 
-		             index = tempReleases size ifFalse: [ 
-			             lastRelease := tempReleases at: index + 1.
-			             currRelease
-				             commits:
-					             (AcMetCommits new rawData:
-							              (GtExternalProcessBuilder new
-								               workingDirectory:
-									               '/home/eugene/Dev/dora-metrics';
-								               command: 'git';
-								               args: { 
-										               'log'.
-										               '--pretty=format:"%h,%ai"'.
-										               (lastRelease tagRef , '..'
-										                , currRelease tagRef).
-										               '--no-merges' };
-								               output) stdout lines);
-				             from: lastRelease refId;
-				             fromDate: lastRelease refDate ] ]
+	tempReleases := (releaseTags reject: [ :tag | 
+		                 tag beginsWithSubCollection: '",' ]) collect: [ 
+		                :tag | AcMetRelease new rawData: tag ].
+	releases := tempReleases keysAndValuesDo: [ :index :currRelease | 
+		            index = 1 ifFalse: [ 
+			            lastVersion := currRelease version
+				                           ifNil: [ lastVersion ]
+				                           ifNotNil: [ currRelease version ].
+			            lastRelease := tempReleases at: index - 1.
+			            currRelease
+			                fixes: (currRelease version ifNil: [lastVersion] ifNotNil:[nil]);
+				            commits:
+					            (AcMetCommits new rawData:
+							             (GtExternalProcessBuilder new
+								              workingDirectory: '/home/eugene/Dev/dora-metrics';
+								              command: 'git';
+								              args: { 
+										              'log'.
+										              '--pretty=format:"%h,%ai"'.
+										              (lastRelease tagRef , '..'
+										               , currRelease tagRef).
+										              '--no-merges' };
+								              output) stdout lines);
+				            from: lastRelease refId;
+				            fromDate: lastRelease refDate ] ]
 ]
 
 { #category : #accessing }
